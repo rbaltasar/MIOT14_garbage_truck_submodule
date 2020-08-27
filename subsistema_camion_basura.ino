@@ -3,6 +3,8 @@
 #include "config.h"
 #include "OTA_updater_ESP32.h"
 #include "network_credentials.h"
+#include "RC522_controller.h"
+#include "IDContainer.h"
 
 /* ------------------------ */
 /* --- Global variables --- */
@@ -12,13 +14,14 @@
 OTAUpdater_ESP32 updater;
 /* Loop count to attempt WiFi connection */
 uint8_t iteration = 0;
+/* Container of read IDs */
+IDContainer id_container;
 
 void setup() {
   Serial.begin(115200);
 
   /* Setup the hardware */
   SetupHardware(); 
-
   Serial.println("Finished setup");
 }
 
@@ -56,23 +59,49 @@ void DisConnectWifi(){
 /* Setup the LED controller */
 void SetupHardware()
 {  
-
+  RC522Controller::Setup();
 }
 
+/* Transmit a single ID to the cloud */
+void TransmitId(int const id){
+  
+}
 
 /* Send gathered data to the cloud */
 void SendData(){
+
+  // Extract ids from the container until empty
+  while(!id_container.empty()){
+    int const id = id_container.pop(); // This action returns the ID and removes it from the container
+    TransmitId(id);
+  }
+  
   Serial.println("Data sent!");
 }
 
-/* Delete gathered data */
-void DeleteData(){
-  Serial.println("Data deleted!");
+/* Insert a new ID into the id_container avoiding duplicates */
+void ProcessID(int const id){
+
+  // Check if the ID has been read before
+  bool const found = id_container.find(id);
+
+  if(found){
+    // Add the ID to the container
+    id_container.push(id);
+  }
 }
 
 /* Attempt to read RFID tag */
 void ReadRfid(){
   
+  int const result = RC522Controller::Read();
+  if(result != -1){
+    Serial.print("Detected container with ID: ");
+    Serial.println(result);
+
+    //Process the new read ID
+    ProcessID(result);
+  }
 }
 
 /* Create an OTA software update web server and wait for updates */
@@ -106,13 +135,11 @@ void loop() {
   ReadRfid();
 
   // Every kNumIterations iterations of the main loop, try to connect to WiFi
-  if(iteration == kNumIterations){
+  if(iteration == kNumIterationsConnect){
     bool connected = ConnectWifi();
     if(connected){
       // Send data
       SendData();
-      // Erase data
-      DeleteData();
       // Check updates
       bool updates_available = CheckUpdates();
       if(updates_available){
@@ -125,9 +152,6 @@ void loop() {
   }
   
   iteration++;
-
-  Serial.print("Iteration: ");
-  Serial.println(iteration);
   
   delay(100);
 }
