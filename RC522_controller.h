@@ -10,6 +10,8 @@ namespace RC522Controller{
 // Hardware pins
 #define SS_PIN    21
 #define RST_PIN   22
+
+int id_offset = 0;
   
 MFRC522 mfrc522(SS_PIN, RST_PIN);
 
@@ -48,7 +50,9 @@ int Read(){
   }
   
   //Compute ID (only first 2 bytes)
-  int const id = 30621; //mfrc522.uid.uidByte[0] + mfrc522.uid.uidByte[1] << 8;
+  int id = mfrc522.uid.uidByte[0] + mfrc522.uid.uidByte[1] << 8;
+
+  id += id_offset++;
   
   return id;
 }

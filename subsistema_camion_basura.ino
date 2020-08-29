@@ -64,7 +64,8 @@ void SetupHardware()
 
 /* Transmit a single ID to the cloud */
 void TransmitId(int const id){
-  
+  Serial.print("Transmitting id ");
+  Serial.println(id);
 }
 
 /* Send gathered data to the cloud */
@@ -85,7 +86,7 @@ void ProcessID(int const id){
   // Check if the ID has been read before
   bool const found = id_container.find(id);
 
-  if(found){
+  if(!found){
     // Add the ID to the container
     id_container.push(id);
   }
