@@ -1,5 +1,7 @@
 #include <rom/rtc.h>
 #include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
 #include "config.h"
 #include "OTA_updater_ESP32.h"
 #include "network_credentials.h"
@@ -62,10 +64,57 @@ void SetupHardware()
   RC522Controller::Setup();
 }
 
+/* Build message body */
+String BuildBody(int const id){
+  StaticJsonDocument<256> doc;
+  JsonObject root = doc.to<JsonObject>();
+  root["1"]["Method"] = "GET";
+  root["1"]["Resource"] = "https://raul:MasterIOT!@13.69.123.54/piwebapi/points?path=\\\\cvillanua-pi\\30208";
+
+  JsonObject second = root.createNestedObject("2");
+  second["Method"] = "POST";
+  
+  JsonArray parent_id = second.createNestedArray("ParentIds");
+  parent_id.add("1");
+  JsonArray parameters = second.createNestedArray("Parameters");
+  parameters.add("$.1.Content.WebId");
+  second["Resource"] = "https://raul:MasterIOT!@13.69.123.54/piwebapi/streams/{0}/value";
+  second["Content"] = "{\"Timestamp\":\"*\", \"Value\":42,}";
+
+
+  String requestBody;
+  serializeJsonPretty(root, requestBody);
+
+  return requestBody;
+}
+
 /* Transmit a single ID to the cloud */
 void TransmitId(int const id){
   Serial.print("Transmitting id ");
   Serial.println(id);
+
+  String requestBody = BuildBody(id);
+
+  Serial.println(requestBody);
+  
+  HTTPClient http;
+  http.begin("https://raul:MasterIOT!@13.69.123.54/piwebapi/batch");
+  http.addHeader("Content-Type", "application/json");
+  int response = http.POST(requestBody);
+  
+  //http.begin("http://jsonplaceholder.typicode.com/posts");
+  //http.addHeader("Content-Type", "text/plain");
+  //int response = http.POST("Hello world");
+  
+  if(response > 0){
+    Serial.println(response);
+    Serial.println(http.getString());
+  } else {
+    Serial.print("Error sending POST: ");
+    Serial.println(response);
+    Serial.println(http.getString());
+  }
+  
 }
 
 /* Send gathered data to the cloud */
