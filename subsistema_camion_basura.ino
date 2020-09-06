@@ -177,7 +177,9 @@ void loop() {
     bool const connected = ConnectWifi();
     if(connected){
       // Send data
-      SendData();
+      if(!id_container.empty()){
+        SendData();
+      }
       // Check updates
       bool const updates_available = CheckUpdates();
       if(updates_available){

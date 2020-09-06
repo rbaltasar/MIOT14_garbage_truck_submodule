@@ -11,11 +11,21 @@ def on_message(client, userdata, message):
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     Headers = {'Content-type': 'application/json'}
-    url = 'https://raul:MasterIOT!@13.69.123.54/piwebapi/streams/F1DPTBbWLAXLjE6mSMM0g5Tk8glQAAAAQ1ZJTExBTlVBLVBJXDMwMjA4/value'
+    url = 'https://raul:MasterIOT!@13.69.123.54/piwebapi/batch'
+    resource = "https://raul:MasterIOT!@13.69.123.54/piwebapi/points?path=\\\\cvillanua-pi\\" + message.payload.decode("utf-8")
 
     request_body = {
-      'Value': message.payload.decode("utf-8")
+     "1": {
+      "Method":"GET",
+      "Resource": resource },
+     "2": {
+      "Method":"POST", "ParentIds": [ "1" ],
+      "Parameters": [ "$.1.Content.WebId" ],
+      "Resource": "https://raul:MasterIOT!@13.69.123.54/piwebapi/streams/{0}/value",
+      "Content":"{ \"Timestamp\":\"*\", \"Value\":69, }"
+            }
     }
+
     resp = requests.post(url, json=request_body, headers=Headers, verify=False)
 
     print(resp.status_code)
@@ -41,3 +51,25 @@ while do_loop:
         client.disconnect()
         client.loop_stop()
         do_loop = False
+
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+Headers = {'Content-type': 'application/json'}
+url = 'https://raul:MasterIOT!@13.69.123.54/piwebapi/batch'
+
+request_body = {
+ "1": {
+  "Method":"GET",
+  "Resource": "https://raul:MasterIOT!@13.69.123.54/piwebapi/points?path=\\\\cvillanua-pi\\30208" },
+ "2": {
+  "Method":"POST", "ParentIds": [ "1" ],
+  "Parameters": [ "$.1.Content.WebId" ],
+  "Resource": "https://raul:MasterIOT!@13.69.123.54/piwebapi/streams/{0}/value",
+  "Content":"{ \"Timestamp\":\"*\", \"Value\":103, }"
+        }
+
+}
+resp = requests.post(url, json=request_body, headers=Headers, verify=False)
+
+print(resp.status_code)
