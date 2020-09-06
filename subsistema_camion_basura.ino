@@ -1,7 +1,6 @@
 #include <rom/rtc.h>
 #include <WiFi.h>
-#include <HTTPClient.h>
-#include <ArduinoJson.h>
+#include <PubSubClient.h>
 #include "config.h"
 #include "OTA_updater_ESP32.h"
 #include "network_credentials.h"
@@ -18,13 +17,39 @@ OTAUpdater_ESP32 updater;
 uint8_t iteration = 0;
 /* Container of read IDs */
 IDContainer id_container;
+/* MQTT connectivity */
+WiFiClient espClient;
+PubSubClient m_client;
 
+/* Initial setup of the microcontroller */
 void setup() {
   Serial.begin(115200);
 
   /* Setup the hardware */
   SetupHardware(); 
   Serial.println("Finished setup");
+}
+
+/* Connect to the MQTT broker */
+void ConnectMQTT(){
+  Serial.println("Connecting to MQTT broker");
+  
+  m_client.setClient(espClient);
+  m_client.setServer(mqtt_server, 1883);
+  m_client.loop();
+  // Connect to the broker
+  Serial.print("Attempting MQTT connection..");
+  while(!m_client.connected()){
+    Serial.print(".");
+    if (m_client.connect("TestID")) //Unique name for each instance of a garbage truck
+    {
+      Serial.println(".");
+      Serial.println("connected");
+    } else {
+      // Attempt connection until success (only for prototype!)
+      delay(1000);
+    }
+  }
 }
 
 /* Setup WiFi connection */
@@ -44,8 +69,13 @@ bool ConnectWifi()
 
   if(WiFi.status() == WL_CONNECTED){
     Serial.println("Connection established!");
-    Serial.println(WiFi.localIP()); // Send the IP address of the ESP8266 to the computer
+    Serial.println(WiFi.localIP());
     retval = true;
+
+    // Connect to MQTT broker only if there is data to send
+    if(!id_container.empty()){
+      ConnectMQTT();
+    }
   }
 
   return retval;
@@ -64,66 +94,24 @@ void SetupHardware()
   RC522Controller::Setup();
 }
 
-/* Build message body */
-String BuildBody(int const id){
-  StaticJsonDocument<256> doc;
-  JsonObject root = doc.to<JsonObject>();
-  root["1"]["Method"] = "GET";
-  root["1"]["Resource"] = "https://raul:MasterIOT!@13.69.123.54/piwebapi/points?path=\\\\cvillanua-pi\\30208";
-
-  JsonObject second = root.createNestedObject("2");
-  second["Method"] = "POST";
-  
-  JsonArray parent_id = second.createNestedArray("ParentIds");
-  parent_id.add("1");
-  JsonArray parameters = second.createNestedArray("Parameters");
-  parameters.add("$.1.Content.WebId");
-  second["Resource"] = "https://raul:MasterIOT!@13.69.123.54/piwebapi/streams/{0}/value";
-  second["Content"] = "{\"Timestamp\":\"*\", \"Value\":42,}";
-
-
-  String requestBody;
-  serializeJsonPretty(root, requestBody);
-
-  return requestBody;
-}
-
-/* Transmit a single ID to the cloud */
+/* Transmit a single ID to the MQTT broker */
 void TransmitId(int const id){
   Serial.print("Transmitting id ");
   Serial.println(id);
 
-  String requestBody = BuildBody(id);
-
-  Serial.println(requestBody);
-  
-  HTTPClient http;
-  http.begin("https://raul:MasterIOT!@13.69.123.54/piwebapi/batch");
-  http.addHeader("Content-Type", "application/json");
-  int response = http.POST(requestBody);
-  
-  //http.begin("http://jsonplaceholder.typicode.com/posts");
-  //http.addHeader("Content-Type", "text/plain");
-  //int response = http.POST("Hello world");
-  
-  if(response > 0){
-    Serial.println(response);
-    Serial.println(http.getString());
-  } else {
-    Serial.print("Error sending POST: ");
-    Serial.println(response);
-    Serial.println(http.getString());
-  }
-  
+  m_client.publish(mqtt_id_topic, String(id).c_str());
+  m_client.loop(); // MQTT client must be fed in order to send events
+  delay(10);
 }
 
-/* Send gathered data to the cloud */
+/* Send gathered data */
 void SendData(){
 
   // Extract ids from the container until empty
   while(!id_container.empty()){
     int const id = id_container.pop(); // This action returns the ID and removes it from the container
     TransmitId(id);
+    delay(200); // Delay to allow the backend to receive and forward the data
   }
   
   Serial.println("Data sent!");
@@ -186,12 +174,12 @@ void loop() {
 
   // Every kNumIterations iterations of the main loop, try to connect to WiFi
   if(iteration == kNumIterationsConnect){
-    bool connected = ConnectWifi();
+    bool const connected = ConnectWifi();
     if(connected){
       // Send data
       SendData();
       // Check updates
-      bool updates_available = CheckUpdates();
+      bool const updates_available = CheckUpdates();
       if(updates_available){
         EnableOTAUpdate();
       }
